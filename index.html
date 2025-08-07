@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>Jeu Doublage - Party Mode (Synchronisé)</title>
+<style>
+  body {
+    background: #2f2f2f;
+    color: #eee;
+    font-family: 'Comic Sans MS', cursive, sans-serif;
+    max-width: 700px;
+    margin: auto;
+    padding: 2rem;
+    user-select: none;
+    text-align: center;
+  }
+  h2 {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    text-shadow: 2px 2px 4px #000;
+  }
+  video {
+    border-radius: 12px;
+    margin: 1rem auto;
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  button {
+    background: #4caf50;
+    border: none;
+    color: white;
+    font-weight: bold;
+    padding: 0.8rem 1.5rem;
+    margin: 1rem 0.5rem 0 0.5rem;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px #357a38;
+    transition: background 0.3s;
+    font-size: 1.2rem;
+  }
+  button:active {
+    box-shadow: none;
+    transform: translateY(2px);
+  }
+  button:disabled {
+    background: #888;
+    cursor: default;
+    box-shadow: none;
+    transform: none;
+  }
+  #status {
+    margin-top: 1rem;
+    font-style: italic;
+  }
+  audio {
+    margin-top: 1rem;
+    width: 100%;
+    outline: none;
+    border-radius: 8px;
+  }
+  #vote-buttons span {
+    font-size: 3rem;
+    margin: 0 1.5rem;
+    cursor: pointer;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+
+<h2>Jeu Doublage - Party Mode</h2>
+
+<div id="content"></div>
+
+<script>
+const playersCount = 3;
+const videosMP4 = [
+  "file:///C:/Users/Jeff%20Martinez/Desktop/TheKairi78%20-%20JSUIS%20MORT%20(%20wallah%20que%20jsuis%20mort%20).mp4", 
+];
+const currentVideoUrl = videosMP4[Math.floor(Math.random() * videosMP4.length)];
+
+let currentPlayer = 1;
+let recordings = JSON.parse(localStorage.getItem('doublages')) || {};
+let votes = {};
+
+const content = document.getElementById('content');
+
+function saveRecordings() {
+  localStorage.setItem('doublages', JSON.stringify(recordings));
+}
+
+function resetRound() {
+  recordings = {};
+  votes = {};
+  currentPlayer = 1;
+  saveRecordings();
+}
+
+function showIntro() {
+  content.innerHTML = `
+    <p>Bienvenue dans ce round !</p>
+    <p>Vidéo sélectionnée aléatoirement.</p>
+    <p><button id="start-recording-btn">Commencer enregistrement Joueur 1</button></p>
+  `;
+  document.getElementById('start-recording-btn').onclick = () => startRecordingForPlayer(1);
+}
+
+function startRecordingForPlayer(playerNum) {
+  currentPlayer = playerNum;
+  content.innerHTML = `
+    <p>Joueur ${playerNum}, regarde la vidéo et prépare-toi à enregistrer ton doublage.</p>
+    <video id="video-player" src="${currentVideoUrl}" muted playsinline style="max-width:100%; border-radius:12px;"></video>
+    <button id="start-rec-btn">Démarrer l'enregistrement (la vidéo démarre aussi)</button>
+    <button id="stop-rec-btn" disabled>Arrêter l'enregistrement</button>
+    <p id="status"></p>
+    <button id="reset-rec-btn" style="background:#d9534f; display:none;">Effacer et recommencer</button>
+  `;
+
+  const video = document.getElementById('video-player');
+  const statusEl = document.getElementById('status');
+  const startBtn = document.getElementById('start-rec-btn');
+  const stopBtn = document.getElementById('stop-rec-btn');
+  const resetBtn = document.getElementById('reset-rec-btn');
+
+  let mediaRecorder, chunks = [];
+
+  startBtn.onclick = async () => {
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    statusEl.textContent = "Préparation de l'enregistrement...";
+
+    chunks = [];
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+
+      mediaRecorder.ondataavailable = e => {
+        chunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          recordings[playerNum] = reader.result;
+          saveRecordings();
+          statusEl.textContent = "Enregistrement terminé.";
+          resetBtn.style.display = "inline-block";
+          stopBtn.disabled = true;
+          startBtn.disabled = false;
+          showPlaybackAndVote(playerNum);
+        };
+        reader.readAsDataURL(blob);
+      };
+
+      // On lance la vidéo et l'enregistrement en même temps
+      video.currentTime = 0;
+      video.play();
+      mediaRecorder.start();
+      statusEl.textContent = "Enregistrement en cours...";
+    } catch (e) {
+      statusEl.textContent = "Erreur accès micro : " + e.message;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    }
+  };
+
+  stopBtn.onclick = () => {
+    mediaRecorder.stop();
+    stopBtn.disabled = true;
+    video.pause();
+  };
+
+  resetBtn.onclick = () => {
+    delete recordings[playerNum];
+    saveRecordings();
+    statusEl.textContent = "Enregistrement supprimé. Recommencez.";
+    resetBtn.style.display = "none";
+    showRecordingScreen(playerNum);
+  };
+}
+
+function showPlaybackAndVote(playerNum) {
+  const audioSrc = recordings[playerNum];
+  content.innerHTML = `
+    <p>Joueur ${playerNum}, écoute ton doublage synchronisé avec la vidéo muette :</p>
+    <video id="video-playback" src="${currentVideoUrl}" muted playsinline style="max-width:100%; border-radius:12px;"></video>
+    <audio id="audio-playback" controls src="${audioSrc}" style="width:100%; margin-top:1rem;"></audio>
+    <div id="vote-buttons">
+      <span id="vote-up" title="Pouce en l'air 👍">👍</span>
+      <span id="vote-down" title="Pouce en bas 👎">👎</span>
+    </div>
+    <p id="vote-status"></p>
+  `;
+
+  const video = document.getElementById('video-playback');
+  const audio = document.getElementById('audio-playback');
+
+  // Synchronisation lecture vidéo/audio manuelle
+  function playBoth() {
+    video.currentTime = 0;
+    audio.currentTime = 0;
+    video.play();
+    audio.play();
+  }
+
+  // Dès que l'utilisateur clique sur play audio, on lance la vidéo synchronisée
+  audio.onplay = () => {
+    if (video.paused) video.play();
+  };
+  audio.onpause = () => {
+    if (!video.paused) video.pause();
+  };
+  // Pour s'assurer que les deux restent synchro
+  audio.ontimeupdate = () => {
+    if (Math.abs(video.currentTime - audio.currentTime) > 0.3) {
+      video.currentTime = audio.currentTime;
+    }
+  };
+
+  document.getElementById('vote-up').onclick = () => voteForPlayer(playerNum, 1);
+  document.getElementById('vote-down').onclick = () => voteForPlayer(playerNum, 0);
+}
+
+function voteForPlayer(playerNum, voteValue) {
+  votes[playerNum] = voteValue;
+  if (currentPlayer < playersCount) {
+    currentPlayer++;
+    showPlaybackAndVote(currentPlayer);
+  } else {
+    showFinalResult();
+  }
+}
+
+function showFinalResult() {
+  let winners = [];
+  for (const [player, vote] of Object.entries(votes)) {
+    if (vote === 1) winners.push(player);
+  }
+  let resultText;
+  if (winners.length === 0) {
+    resultText = "Personne n'a reçu de vote positif.";
+  } else if (winners.length === 1) {
+    resultText = `Le gagnant est le joueur ${winners[0]} avec un pouce en l'air ! 🎉`;
+  } else {
+    resultText = `Match nul entre joueurs : ${winners.join(', ')}.`;
+  }
+
+  content.innerHTML = `
+    <h3>Résultat final</h3>
+    <p>${resultText}</p>
+    <button id="restart-btn">Recommencer un round</button>
+  `;
+
+  document.getElementById('restart-btn').onclick = () => {
+    resetRound();
+    showIntro();
+  };
+}
+
+showIntro();
+</script>
+
+</body>
+</html>
