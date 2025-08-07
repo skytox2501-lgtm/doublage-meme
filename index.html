@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>Jeu Doublage - Party Mode (YouTube)</title>
+<style>
+  body {
+    background: #2f2f2f;
+    color: #eee;
+    font-family: 'Comic Sans MS', cursive, sans-serif;
+    max-width: 700px;
+    margin: auto;
+    padding: 2rem;
+    user-select: none;
+    text-align: center;
+  }
+  h2 {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    text-shadow: 2px 2px 4px #000;
+  }
+  #player {
+    margin: 1rem auto;
+    border-radius: 12px;
+    max-width: 100%;
+    height: 315px;
+  }
+  button {
+    background: #4caf50;
+    border: none;
+    color: white;
+    font-weight: bold;
+    padding: 0.8rem 1.5rem;
+    margin: 1rem 0.5rem 0 0.5rem;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px #357a38;
+    transition: background 0.3s;
+    font-size: 1.2rem;
+  }
+  button:active {
+    box-shadow: none;
+    transform: translateY(2px);
+  }
+  button:disabled {
+    background: #888;
+    cursor: default;
+    box-shadow: none;
+    transform: none;
+  }
+  #status {
+    margin-top: 1rem;
+    font-style: italic;
+  }
+  audio {
+    margin-top: 1rem;
+    width: 100%;
+    outline: none;
+    border-radius: 8px;
+  }
+  #vote-buttons span {
+    font-size: 3rem;
+    margin: 0 1.5rem;
+    cursor: pointer;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+
+<h2>Jeu Doublage - Party Mode (YouTube)</h2>
+
+<div id="content"></div>
+
+<script>
+// Variables globales
+const playersCount = 3;
+const videosYouTube = [
+  "dQw4w9WgXcQ", // Exemple de vidéo YouTube célèbre, remplace par ta propre ID
+];
+const currentVideoId = videosYouTube[Math.floor(Math.random() * videosYouTube.length)];
+
+let currentPlayer = 1;
+let recordings = JSON.parse(localStorage.getItem('doublages')) || {};
+let votes = {};
+
+const content = document.getElementById('content');
+
+let player;
+let mediaRecorder;
+let chunks = [];
+
+// Charger l’API YouTube
+function loadYouTubeAPI() {
+  const tag = document.createElement('script');
+  tag.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(tag);
+}
+
+// Fonction appelée automatiquement par l’API YouTube
+function onYouTubeIframeAPIReady() {
+  // Pas d'initialisation ici, on initialise à chaque étape
+}
+
+function createPlayer(videoId, controls = 1) {
+  return new YT.Player('player', {
+    height: '315',
+    width: '560',
+    videoId: videoId,
+    playerVars: {
+      controls: controls,
+      rel: 0,
+      disablekb: 1,
+      modestbranding: 1,
+    },
+  });
+}
+
+// Sauvegarder enregistrements
+function saveRecordings() {
+  localStorage.setItem('doublages', JSON.stringify(recordings));
+}
+
+function resetRound() {
+  recordings = {};
+  votes = {};
+  currentPlayer = 1;
+  saveRecordings();
+}
+
+function showIntro() {
+  content.innerHTML = `
+    <p>Bienvenue dans ce round !</p>
+    <p>Vidéo YouTube sélectionnée aléatoirement.</p>
+    <p><button id="start-recording-btn">Commencer enregistrement Joueur 1</button></p>
+  `;
+  document.getElementById('start-recording-btn').onclick = () => startRecordingForPlayer(1);
+}
+
+function startRecordingForPlayer(playerNum) {
+  currentPlayer = playerNum;
+  content.innerHTML = `
+    <p>Joueur ${playerNum}, regarde la vidéo et prépare-toi à enregistrer ton doublage.</p>
+    <div id="player"></div>
+    <button id="start-rec-btn">Démarrer l'enregistrement (la vidéo démarre aussi)</button>
+    <button id="stop-rec-btn" disabled>Arrêter l'enregistrement</button>
+    <p id="status"></p>
+    <button id="reset-rec-btn" style="background:#d9534f; display:none;">Effacer et recommencer</button>
+  `;
+
+  player = createPlayer(currentVideoId, 0); // 0 = pas de contrôles
+
+  const statusEl = document.getElementById('status');
+  const startBtn = document.getElementById('start-rec-btn');
+  const stopBtn = document.getElementById('stop-rec-btn');
+  const resetBtn = document.getElementById('reset-rec-btn');
+
+  chunks = [];
+
+  startBtn.onclick = async () => {
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    statusEl.textContent = "Préparation de l'enregistrement...";
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+
+      mediaRecorder.ondataavailable = e => {
+        chunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          recordings[playerNum] = reader.result;
+          saveRecordings();
+          statusEl.textContent = "Enregistrement terminé.";
+          resetBtn.style.display = "inline-block";
+          stopBtn.disabled = true;
+          startBtn.disabled = false;
+          showPlaybackAndVote(playerNum);
+        };
+        reader.readAsDataURL(blob);
+      };
+
+      player.seekTo(0);
+      player.playVideo();
+      mediaRecorder.start();
+      statusEl.textContent = "Enregistrement en cours...";
+    } catch (e) {
+      statusEl.textContent = "Erreur accès micro : " + e.message;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    }
+  };
+
+  stopBtn.onclick = () => {
+    mediaRecorder.stop();
+    stopBtn.disabled = true;
+    player.pauseVideo();
+  };
+
+  resetBtn.onclick = () => {
+    delete recordings[playerNum];
+    saveRecordings();
+    statusEl.textContent = "Enregistrement supprimé. Recommencez.";
+    resetBtn.style.display = "none";
+    startRecordingForPlayer(playerNum);
+  };
+}
+
+function showPlaybackAndVote(playerNum) {
+  const audioSrc = recordings[playerNum];
+  content.innerHTML = `
+    <p>Joueur ${playerNum}, écoute ton doublage synchronisé avec la vidéo YouTube :</p>
+    <div id="player"></div>
+    <audio id="audio-playback" controls src="${audioSrc}" style="width:100%; margin-top:1rem;"></audio>
+    <div id="vote-buttons">
+      <span id="vote-up" title="Pouce en l'air 👍">👍</span>
+      <span id="vote-down" title="Pouce en bas 👎">👎</span>
+    </div>
+    <p id="vote-status"></p>
+  `;
+
+  player = createPlayer(currentVideoId, 0);
+
+  const audio = document.getElementById('audio-playback');
+
+  audio.onplay = () => {
+    player.seekTo(0);
+    player.playVideo();
+  };
+  audio.onpause = () => {
+    player.pauseVideo();
+  };
+  audio.ontimeupdate = () => {
+    player.getCurrentTime().then(time => {
+      if (Math.abs(time - audio.currentTime) > 0.3) {
+        player.seekTo(audio.currentTime);
+      }
+    });
+  };
+
+  document.getElementById('vote-up').onclick = () => voteForPlayer(playerNum, 1);
+  document.getElementById('vote-down').onclick = () => voteForPlayer(playerNum, 0);
+}
+
+function voteForPlayer(playerNum, voteValue) {
+  votes[playerNum] = voteValue;
+  if (currentPlayer < playersCount) {
+    currentPlayer++;
+    showPlaybackAndVote(currentPlayer);
+  } else {
+    showFinalResult();
+  }
+}
+
+function showFinalResult() {
+  let winners = [];
+  for (const [player, vote] of Object.entries(votes)) {
+    if (vote === 1) winners.push(player);
+  }
+  let resultText;
+  if (winners.length === 0) {
+    resultText = "Personne n'a reçu de vote positif.";
+  } else if (winners.length === 1) {
+    resultText = `Le gagnant est le joueur ${winners[0]} avec un pouce en l'air ! 🎉`;
+  } else {
+    resultText = `Match nul entre joueurs : ${winners.join(', ')}.`;
+  }
+
+  content.innerHTML = `
+    <h3>Résultat final</h3>
+    <p>${resultText}</p>
+    <button id="restart-btn">Recommencer un round</button>
+  `;
+
+  document.getElementById('restart-btn').onclick = () => {
+    resetRound();
+    showIntro();
+  };
+}
+
+loadYouTubeAPI();
+
+showIntro();
+</script>
+
+</body>
+</html>
