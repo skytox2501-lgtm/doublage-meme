@@ -73,10 +73,10 @@
 <div id="content"></div>
 
 <script>
-// --- Variables globales ---
+// Variables globales
 const playersCount = 3;
 const videosYouTube = [
-  "B2e5Pglk-UY", // Remplace "JSuisMort_ID" par l’ID YouTube réel, ex: "dQw4w9WgXcQ"
+  "dQw4w9WgXcQ", // Exemple de vidéo YouTube célèbre, remplace par ta propre ID
 ];
 const currentVideoId = videosYouTube[Math.floor(Math.random() * videosYouTube.length)];
 
@@ -86,27 +86,37 @@ let votes = {};
 
 const content = document.getElementById('content');
 
-let player; // YouTube Player
+let player;
 let mediaRecorder;
 let chunks = [];
 
-// --- YouTube API Setup ---
+// Charger l’API YouTube
 function loadYouTubeAPI() {
   const tag = document.createElement('script');
   tag.src = "https://www.youtube.com/iframe_api";
   document.head.appendChild(tag);
 }
 
+// Fonction appelée automatiquement par l’API YouTube
 function onYouTubeIframeAPIReady() {
-  player = new YT.Player('player', {
+  // Pas d'initialisation ici, on initialise à chaque étape
+}
+
+function createPlayer(videoId, controls = 1) {
+  return new YT.Player('player', {
     height: '315',
     width: '560',
-    videoId: currentVideoId,
-    playerVars: { 'controls': 1, 'rel': 0, 'disablekb': 1, 'modestbranding': 1 },
+    videoId: videoId,
+    playerVars: {
+      controls: controls,
+      rel: 0,
+      disablekb: 1,
+      modestbranding: 1,
+    },
   });
 }
 
-// --- Sauvegarde des enregistrements ---
+// Sauvegarder enregistrements
 function saveRecordings() {
   localStorage.setItem('doublages', JSON.stringify(recordings));
 }
@@ -118,7 +128,6 @@ function resetRound() {
   saveRecordings();
 }
 
-// --- Ecran d’intro ---
 function showIntro() {
   content.innerHTML = `
     <p>Bienvenue dans ce round !</p>
@@ -128,11 +137,10 @@ function showIntro() {
   document.getElementById('start-recording-btn').onclick = () => startRecordingForPlayer(1);
 }
 
-// --- Ecran d’enregistrement ---
 function startRecordingForPlayer(playerNum) {
   currentPlayer = playerNum;
   content.innerHTML = `
-    <p>Joueur ${playerNum}, regarde la vidéo YouTube et prépare-toi à enregistrer ton doublage.</p>
+    <p>Joueur ${playerNum}, regarde la vidéo et prépare-toi à enregistrer ton doublage.</p>
     <div id="player"></div>
     <button id="start-rec-btn">Démarrer l'enregistrement (la vidéo démarre aussi)</button>
     <button id="stop-rec-btn" disabled>Arrêter l'enregistrement</button>
@@ -140,13 +148,7 @@ function startRecordingForPlayer(playerNum) {
     <button id="reset-rec-btn" style="background:#d9534f; display:none;">Effacer et recommencer</button>
   `;
 
-  // Initialise le lecteur YouTube pour cette section
-  player = new YT.Player('player', {
-    height: '315',
-    width: '560',
-    videoId: currentVideoId,
-    playerVars: { 'controls': 0, 'rel': 0, 'disablekb': 1, 'modestbranding': 1 },
-  });
+  player = createPlayer(currentVideoId, 0); // 0 = pas de contrôles
 
   const statusEl = document.getElementById('status');
   const startBtn = document.getElementById('start-rec-btn');
@@ -183,7 +185,7 @@ function startRecordingForPlayer(playerNum) {
         reader.readAsDataURL(blob);
       };
 
-      // Lance la vidéo YouTube et l’enregistrement audio en même temps
+      player.seekTo(0);
       player.playVideo();
       mediaRecorder.start();
       statusEl.textContent = "Enregistrement en cours...";
@@ -209,7 +211,6 @@ function startRecordingForPlayer(playerNum) {
   };
 }
 
-// --- Playback et vote ---
 function showPlaybackAndVote(playerNum) {
   const audioSrc = recordings[playerNum];
   content.innerHTML = `
@@ -223,16 +224,10 @@ function showPlaybackAndVote(playerNum) {
     <p id="vote-status"></p>
   `;
 
-  player = new YT.Player('player', {
-    height: '315',
-    width: '560',
-    videoId: currentVideoId,
-    playerVars: { 'controls': 0, 'rel': 0, 'disablekb': 1, 'modestbranding': 1 },
-  });
+  player = createPlayer(currentVideoId, 0);
 
   const audio = document.getElementById('audio-playback');
 
-  // Synchronisation lecture vidéo/audio simple
   audio.onplay = () => {
     player.seekTo(0);
     player.playVideo();
@@ -241,7 +236,6 @@ function showPlaybackAndVote(playerNum) {
     player.pauseVideo();
   };
   audio.ontimeupdate = () => {
-    // On ajuste la vidéo si trop décalée (tolérance 0.3s)
     player.getCurrentTime().then(time => {
       if (Math.abs(time - audio.currentTime) > 0.3) {
         player.seekTo(audio.currentTime);
@@ -253,7 +247,6 @@ function showPlaybackAndVote(playerNum) {
   document.getElementById('vote-down').onclick = () => voteForPlayer(playerNum, 0);
 }
 
-// --- Gestion des votes ---
 function voteForPlayer(playerNum, voteValue) {
   votes[playerNum] = voteValue;
   if (currentPlayer < playersCount) {
@@ -264,7 +257,6 @@ function voteForPlayer(playerNum, voteValue) {
   }
 }
 
-// --- Résultat final ---
 function showFinalResult() {
   let winners = [];
   for (const [player, vote] of Object.entries(votes)) {
@@ -291,13 +283,10 @@ function showFinalResult() {
   };
 }
 
-// --- Lancement ---
 loadYouTubeAPI();
-window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
 
 showIntro();
 </script>
 
 </body>
 </html>
-
